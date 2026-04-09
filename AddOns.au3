@@ -757,7 +757,7 @@ Func MoveToFollowPath($aX, $aY, $aAggroRange = 1250, $aFightRangeOut = 1500)
 		Pathfinder_MoveTo($aX, $aY, -1, "Filter_TheMouthOfTorment", $aAggroRange, $aFightRangeOut , $g_i_FinisherMode, "")
 	Else
 		;Pathfinder_MoveTo($aX, $aY, -1, "FilterObstacle", $aAggroRange, $aFightRangeOut , $g_i_FinisherMode, "PickUpLoot")
-		Pathfinder_MoveTo_Plus($aX, $aY, -1, "FilterObstacle", $aAggroRange, $aFightRangeOut , $g_i_FinisherMode, "PickUpItemsAndOpenChest")	
+		Pathfinder_MoveTo_Plus($aX, $aY, -1, "", $aAggroRange, $aFightRangeOut , $g_i_FinisherMode, "PickUpItemsAndOpenChest")	
 	EndIf
 EndFunc   ;==>MoveToFollowPath
 
@@ -785,10 +785,9 @@ EndFunc   ;==>FilterObstacle
 
 Func CheckMapLodedHardmode()
 	Local $lDeadlock = TimerInit()
-	Out("Testo... Checking Hardmode")
-	Map_WaitMapIsLoaded()
-	Sleep(Other_GetPing() + 500)
-	While World_GetWorldInfo("FoesToKill") == 0
+	
+	While Map_GetMapID() = 0 OR Agent_GetAgentInfo(-2, "X") = 0 OR Agent_GetAgentInfo(-2, "Y") = 0 OR Map_GetInstanceInfo("Type") = $GC_I_MAP_TYPE_LOADING OR World_GetWorldInfo("FoesToKill") = 0
+		Sleep(Other_GetPing() + 16)
 		If TimerDiff($lDeadlock) > 5000 Then
 			Out("Timeout checking foes to kill. Hardmode active?")
 			$g_sPendingAction = "StopWithError"

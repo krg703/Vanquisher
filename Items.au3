@@ -26,15 +26,24 @@ Global $g_aChestID[24]
 	 $g_aChestID[23] = 8141 ; "Locked Chest"
 
 Func PickUpItemsAndOpenChest()
-	Local $chestOpenRange = 2500
-	Local $pickUpLootRange = 2500
+	Local $lChestOpenRange = 2500
+	Local $lPickUpLootRange = 2500
+	Local $lPickedSomething = False
+	Local $openedChest = False
+	Local $lDidSomething = False
+	
 	;check if pick up loot is checked
-	IF GUICtrlRead($chkPickUpLoot) = $GUI_CHECKED Then PickUpLoot($pickUpLootRange)
+	IF GUICtrlRead($chkPickUpLoot) = $GUI_CHECKED Then $lPickedSomething = PickUpLoot($lPickUpLootRange)
+	IF $lDidSomething Then Out("PickedSomething")
 	;check if open chest is checked
-	IF GUICtrlRead($chkOpenChest) = $GUI_CHECKED Then FindAndOpenChests($chestOpenRange)
+	IF GUICtrlRead($chkOpenChest) = $GUI_CHECKED Then $openedChest = FindAndOpenChests($lChestOpenRange)
+	IF $lDidSomething Then Out("OpenedChest")
+	$lDidSomething = $lPickedSomething OR $openedChest
+	Return $lDidSomething
 EndFunc		;==> PickUpItemsAndOpenChest
 
 Func PickUpLoot($iMaxDist = 2500)
+	Local $lPickedSomething = False
     ; Do not pick up loot if we are in an outpost/town
     If Map_GetInstanceInfo("IsOutpost") Then Return
 
@@ -79,7 +88,7 @@ Func PickUpLoot($iMaxDist = 2500)
     Next
 
     If $lValidCount = 0 Then Return
-
+	Out("$lValidCount " & $lValidCount)
     ; SORTING: Shortest path optimization (Bubble Sort)
     ; Arranges items from closest to farthest relative to the player's current position
     For $i = 0 To $lValidCount - 2
@@ -112,18 +121,22 @@ Func PickUpLoot($iMaxDist = 2500)
         If Not GetItemAgentExists($aItemAgentID) Then ContinueLoop
 
         ; Command the pathfinder to move to the item's location
-        Pathfinder_MoveTo(Agent_GetAgentInfo($aItemAgentID, "X"), Agent_GetAgentInfo($aItemAgentID, "Y"), Agent_GetAgentInfo($aItemAgentID, "Plane"))
+		Local $x = Agent_GetAgentInfo($aItemAgentID, "X")
+		Local $y = Agent_GetAgentInfo($aItemAgentID, "Y")
+		Local $l = Agent_GetAgentInfo($aItemAgentID, "Plane")
+		Local $lDeadlock = TimerInit()
+		Do
+			If Agent_GetAgentInfo(-2, "isDead") Then Return
+			If TimerDiff($lDeadlock) > 5000 Then ExitLoop
+			Out("pickup...x:" & $x & " y:" & $y & " L:" & $l)
+			Map_MoveLayer($x, $y, $l)
+			Sleep(Other_GetPing() + 500)
+		Until Agent_GetDistanceToXY($x, $y) < 50 OR NOT GetItemAgentExists($aItemAgentID)
         Item_PickUpItem($aItemAgentID)
-
-        ; Deadlock prevention: Wait for item to disappear from world or timeout
-        Local $lDeadlock = TimerInit()
-        While GetItemAgentExists($aItemAgentID)
-            Sleep(100)
-            If Agent_GetAgentInfo(-2, "isDead") Then Return
-            ; If picking up takes longer than 5 seconds, it's likely stuck; skip to next item
-            If TimerDiff($lDeadlock) > 5000 Then ExitLoop 
-        WEnd
+		Sleep(Other_GetPing() + 300)
+		$lPickedSomething = True
     Next
+	Return $lPickedSomething
 EndFunc		;==>PickUpLoot
 
 Func _GetPathfindingDistanceToItem($aStartX, $aStartY, $aDestX, $aDestY)
@@ -212,6 +225,8 @@ Func FindAndOpenChests($range = 2500)
 	If GetAmountOfInventoryItemByID($GC_I_MODELID_LOCKPICK) == 0 Then Return Null
 	Local $gadgetID
 	Local $agents = Agent_GetAgentArray($GC_I_AGENT_TYPE_GADGET)
+	Local $lMyX
+	Local $lMyY
 	Local $openedChest = False
 	For $agent = 1 to $agents[0]
 		Local $agentPtr = $agents[$agent]
@@ -222,23 +237,36 @@ Func FindAndOpenChests($range = 2500)
 			If Agent_GetDistance($agentPtr) > $range Then ContinueLoop
 			Local $x = Agent_GetAgentInfo($agentPtr, "X")
 			Local $y = Agent_GetAgentInfo($agentPtr, "Y")
-			Out("opening chest ID: " & $lAgentID)
-			Pathfinder_MoveTo($x, $y)
-			If Agent_GetAgentInfo(-2, "isDead") Then Return
+			Local $l = Agent_GetAgentInfo($agentPtr, "Plane")
+			Local $lDeadlock = TimerInit()
+			Do
+				$lMyX = Agent_GetAgentInfo(-2, "X")
+				$lMyY = Agent_GetAgentInfo(-2, "Y")
+				If Agent_GetAgentInfo(-2, "isDead") Then Return
+				If TimerDiff($lDeadlock) > 5000 Then ExitLoop
+				Out("pickup...x:" & $x & " y:" & $y & " L:" & $l)
+				Map_MoveLayer($x, $y, $l)
+				; Fight if needed
+				UAI_Fight($lMyX, $lMyY)
+				Sleep(100)
+			Until Agent_GetDistanceToXY($x, $y) < 50
 			Agent_GoSignpost($lAgentID)
-			Other_RndSleep(300)
+			Sleep(Other_GetPing() + 300)
+			Out("opening chest ID: " & $lAgentID)
 			Ui_OpenChest()
-			Other_RndSleep(300)
+			Sleep(Other_GetPing() + 300)
 			If Agent_GetAgentInfo(-2, "isDead") Then Return
 			PickUpLoot()
-			Other_RndSleep(300)
+			Sleep(Other_GetPing() + 300)
 			
-			;Enter the chest ID into an array to mark it as open.
+			;Enter the chest ID into an array to mark it as opened.
 			Local $iCurrentSize = UBound($opendChests)
 			ReDim $opendChests[$iCurrentSize + 1]
 			$opendChests[$iCurrentSize] = $lAgentID
+			$openedChest = True
 		EndIf
 	Next
+	Return $openedChest
 EndFunc
 
 Func GetAmountOfInventoryItemByID($SearchingItemModelID)
