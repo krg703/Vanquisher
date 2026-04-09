@@ -315,26 +315,21 @@ Func VanquishMap($campaignID, $regionName, $regionID, $mapName, $mapID, $cityID,
 		Switch $mapID
 		Case $GC_I_MAP_ID_ZEN_DAIJUN_EXPLORABLE
 			EnterMapWithNPC(20299, 9140)
-			Map_WaitMapIsLoaded()
-			Sleep(Other_GetPing() + 500)
 		Case $GC_I_MAP_ID_THE_HIDDEN_CITY_OF_AHDASHIM
 			EnterMapWithNPC(1340, -20416)
-			Map_WaitMapIsLoaded()
-			Sleep(Other_GetPing() + 500)
 		Case $GC_I_MAP_ID_GARDEN_OF_SEBORHIN
 			Local $l_a_Path = Map_GetExitPortalsCoords($cityID, $GC_I_MAP_ID_FORUM_HIGHLANDS)
 			Local $l_f_PortalX = $l_a_Path[0]
 			Local $l_f_PortalY = $l_a_Path[1]
 			Out("Going to portal in Tihark Orchard (" & $l_f_PortalX & ", " & $l_f_PortalY & ")")
 			Pathfinder_MoveTo($l_f_PortalX, $l_f_PortalY)
-			Map_WaitMapIsLoaded()
-			Sleep(Other_GetPing() + 500)
+			IF CheckMapLodedHardmode() = False Then
+				$g_sPendingAction = "StopWithError"
+				Return 
+			EndIf
 			EnterMapWithNPC(-4510, 15807)
 		Case $GC_I_MAP_ID_BAHDOK_CAVERNS
-			EnterMapWithNPC(-13646, -10449)
-			Map_WaitMapIsLoaded()
-			Sleep(Other_GetPing() + 500)
-				
+			EnterMapWithNPC(-13646, -10449)				
 		Case Else 
 			;Get the full path with the coordinates of the portals
 			Local $l_a_FullPath = Map_GetPathWithPortalCoords(Map_GetMapID(), $mapID)
@@ -346,19 +341,20 @@ Func VanquishMap($campaignID, $regionName, $regionID, $mapName, $mapID, $cityID,
 			
 				Out("Going to portal in " & $l_s_CurrentMapName & " (" & $l_f_PortalX & ", " & $l_f_PortalY & ")")
 				Pathfinder_MoveTo($l_f_PortalX, $l_f_PortalY)
-				
-				
-				Map_WaitMapIsLoaded_Ping()
-				Sleep(Other_GetPing() + 500)
 				If Map_GetMapID() = $mapID Then ExitLoop
+				IF CheckMapLodedHardmode() = False Then
+					$g_sPendingAction = "StopWithError"
+					Return 
+				EndIf
+				
 			Next
-			
-			IF CheckMapLodedHardmode() = False Then
-				$g_sPendingAction = "StopWithError"
-				Return 
-			EndIf
 		EndSwitch		
-	EndIf	
+	EndIf
+	
+	IF CheckMapLodedHardmode() = False Then
+		$g_sPendingAction = "StopWithError"
+		Return 
+	EndIf
 	
 	;Where the magic happens
 	Switch $mapID
@@ -667,9 +663,8 @@ Func VanquishMap($campaignID, $regionName, $regionID, $mapName, $mapID, $cityID,
 			Case $GC_I_MAP_ID_VERDANT_CASCADES							
 				VQVerdantCascades()
 	EndSwitch
-
-	Sleep(500)
-
+	
+	Out(World_GetWorldInfo("FoesToKill"))
 	If World_GetWorldInfo("FoesToKill") = 0 Then 
 		
 		;Looping current map
@@ -727,6 +722,10 @@ EndFunc 	;==>EnterMapWithNPC
 Func Pathfinder_MoveTo_Waypoints($aWaypoints)
 Local $aAggroRange = 1250
 Local $aFightRangeOut = 1300
+	IF (UBound($aWaypoints) - 1) = 0 Then 
+		("No Waipoints found")
+		Return
+	EndIf
     For $Index = 0 To UBound($aWaypoints) - 1
             If World_GetWorldInfo("FoesToKill") = 0 Then
                 ExitLoop
@@ -786,6 +785,9 @@ EndFunc   ;==>FilterObstacle
 
 Func CheckMapLodedHardmode()
 	Local $lDeadlock = TimerInit()
+	Out("Testo... Checking Hardmode")
+	Map_WaitMapIsLoaded()
+	Sleep(Other_GetPing() + 500)
 	While World_GetWorldInfo("FoesToKill") == 0
 		If TimerDiff($lDeadlock) > 5000 Then
 			Out("Timeout checking foes to kill. Hardmode active?")
